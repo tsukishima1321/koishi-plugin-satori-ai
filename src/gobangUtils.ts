@@ -1,75 +1,79 @@
-﻿// emcc gobang.cpp -O3 -s EXPORTED_FUNCTIONS="['_decideMove', '_malloc', '_free']" -s MODULARIZE=1 -s ENVIRONMENT='node' -o gobang.js
-
-#define _CRT_SECURE_NO_WARNINGS
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <string>
-#define BOARD_SIZE 12    // 棋盘大小
-#define EMPTY 0          // 空位
-#define BLACK 1          // 黑棋
-#define WHITE 2          // 白棋
-#define INF 2147483647   // 正无穷
-#define _INF -2147483647 // 负无穷
-#define DEPTH 5          // 搜索深度
-#define START "START"    // 开始游戏
-#define PLACE "PLACE"    // 放置棋子
-#define TURN "TURN"      // 轮到我方下棋
-#define END "END"        // 游戏结束
-const int BOARD_MIDDLE_1 = (BOARD_SIZE + 1) / 2 - 1;
-const int BOARD_MIDDLE_2 = BOARD_SIZE / 2;
-struct chessType {
-    int win5;   // 连五
-    int alive4; // 活4
-    int conti4; // 冲4
-    int alive3; // 活3
-    int conti3; // 眠3
-    int jump3;  // 跳3
-    int alive2; // 活2
-    int conti2; // 眠2
-    int jump2;  // 跳2
-    int alive1; // 活1
-    int conti1; // 眠1
-};
-// 坐标结构体
-struct coordinate {
-    int x = -1;
-    int y = -1;
-    int score = 0;
-    coordinate(int a = 0, int b = 0, int s = 0) :
-            x(a), y(b), score(s) {}
-};
-// 棋盘节点结构体
-struct Nude {
-    int board[BOARD_SIZE][BOARD_SIZE] = {{0}}; // 棋盘状态
-    int state = 0;                             // 棋盘状态标识
-    Nude() {
-        // 初始化棋盘，放置初始棋子
-        board[BOARD_MIDDLE_1][BOARD_MIDDLE_1] = WHITE;
-        board[BOARD_MIDDLE_2][BOARD_MIDDLE_2] = WHITE;
-        board[BOARD_MIDDLE_2][BOARD_MIDDLE_1] = BLACK;
-        board[BOARD_MIDDLE_1][BOARD_MIDDLE_2] = BLACK;
-    }
-    void arr_input(int x, int y, int playerround) {
-        board[x][y] = playerround; // 在指定位置放置棋子
-    }
-};
-class Game {
-public:
-    int myFlag;
-    int enemyFlag;
-    bool draw;
-    Nude MAP;
-    Game() :
-            myFlag(0), enemyFlag(0), draw(0) {}
-};
-// Game game;
-void debug(const char *str) {
-    printf("DEBUG %s\n", str);
-    fflush(stdout);
+export function runGobang(board: number[][], playerFlag: number, level: number,) {
+    const game = new Game
+    game.boardState.board = board
+    game.myFlag = playerFlag
+    game.enemyFlag = 3 - playerFlag
+    const result = entrance(DEPTH, _INF, INF, game.myFlag, new coordinate, new coordinate, game)
+    return { aiX: result.x, aiY: result.y, score: result.score }
 }
+
+const BOARD_SIZE = 12    // 棋盘大小
+const EMPTY = 0          // 空位
+const BLACK = 1          // 黑棋
+const WHITE = 2          // 白棋
+const INF = 2147483647   // 正无穷
+const _INF = -2147483647 // 负无穷
+const DEPTH = 5          // 搜索深度
+
+const BOARD_MIDDLE_1 = Math.floor((BOARD_SIZE + 1) / 2) - 1
+const BOARD_MIDDLE_2 = Math.floor(BOARD_SIZE / 2)
+
+interface chessType {
+    win5: number,   // 连五
+    alive4: number, // 活4
+    conti4: number, // 冲4
+    alive3: number, // 活3
+    conti3: number, // 眠3
+    jump3: number,  // 跳3
+    alive2: number, // 活2
+    conti2: number, // 眠2
+    jump2: number,  // 跳2
+    alive1: number, // 活1
+    conti1: number, // 眠1
+}
+
+// 坐标结构体
+class coordinate {
+    public x = -1;
+    public y = -1;
+    public score = 0;
+    constructor(a = 0, b = 0, s = 0) {
+        this.x = a;
+        this.y = b;
+        this.score = s;
+    }
+}
+
+// 棋盘状态类
+class BoardState {
+    public board: number[][] = [] // 棋盘状态
+    public state = 0              // 棋盘状态标识
+    constructor() {
+        this.board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0))
+        this.board[BOARD_MIDDLE_1][BOARD_MIDDLE_1] = WHITE
+        this.board[BOARD_MIDDLE_2][BOARD_MIDDLE_2] = WHITE
+        this.board[BOARD_MIDDLE_2][BOARD_MIDDLE_1] = BLACK
+        this.board[BOARD_MIDDLE_1][BOARD_MIDDLE_2] = BLACK
+    }
+    public arr_input(x: number, y: number, playerround: number) {
+        this.board[x][y] = playerround // 在指定位置放置棋子
+    }
+}
+
+class Game {
+    public myFlag: number = 0 // 玩家棋子颜色（1: 黑棋，2: 白棋）
+    public enemyFlag: number = 0 // AI 棋子颜色（1: 黑棋，2: 白棋）
+    public draw: boolean = false // 是否平局
+    public boardState: BoardState = new BoardState() // 棋盘状态
+    constructor() {
+        this.myFlag = 0
+        this.enemyFlag = 0
+        this.draw = false
+    }
+}
+
 // 判断坐标是否在棋盘范围内
-bool judgeInRange(coordinate temp) {
+function judgeInRange(temp: coordinate): boolean {
     if (temp.x < 0)
         return false;
     if (temp.y < 0)
@@ -80,91 +84,102 @@ bool judgeInRange(coordinate temp) {
         return false;
     return true;
 }
+
 // 获取指定位置的棋子颜色
-int getColor(coordinate target, const Game &game) {
+function getColor(target: coordinate, game: Game) {
     if (judgeInRange(target))
-        return game.MAP.board[target.x][target.y];
+        return game.boardState.board[target.x][target.y];
     else
         return game.enemyFlag;
 }
+
 // 在指定位置放置棋子
-void place(coordinate target, int player, Game &game) {
+/*void place(coordinate target, int player, Game &game) {
     game.MAP.board[target.x][target.y] = player;
+}*/
+// 在指定位置放置棋子
+function place(target: coordinate, player: number, game: Game) {
+    game.boardState.board[target.x][target.y] = player;
 }
+
 // 快速排序函数
-int partition(coordinate *s, int high, int low) {
-    int pi = s[high].score;
-    int i = low;
-    for (int j = low; j <= high - 1; j++) {
+function partition(s: coordinate[], high: number, low: number): number {
+    const pi = s[high].score;
+    let i = low;
+    for (let j = low; j <= high - 1; j++) {
         if (s[j].score >= pi) {
-            coordinate temp = s[i];
+            const temp = s[i];
             s[i] = s[j];
             s[j] = temp;
             i++;
         }
     }
-    coordinate temp = s[i];
+    const temp = s[i];
     s[i] = s[high];
     s[high] = temp;
     return i;
 }
-void quickSort(coordinate *s, int high, int low = 0) {
+
+function quickSort(s: coordinate[], high: number, low: number = 0) {
     if (low < high) {
-        int pi = partition(s, high, low);
+        const pi = partition(s, high, low);
         quickSort(s, pi - 1, low);
         quickSort(s, high, pi + 1);
     }
 }
+
 // 返回p点dire方向上w距离的点
-coordinate Neighbor(coordinate temp, int dire, int w) {
-    const int direction[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
-    coordinate neighbor;
+function Neighbor(temp: coordinate, dire: number, w: number): coordinate {
+    const direction = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    const neighbor = new coordinate();
     neighbor.x = temp.x + w * direction[dire][0];
     neighbor.y = temp.y + w * direction[dire][1];
     return neighbor;
 }
+
 // 判断点在d距离内是否有邻居
-int hasNeighbor(coordinate temp, int d, const Game &game) {
+function hasNeighbor(temp: coordinate, d: number, game: Game): boolean {
     // 找棋盘上有落子点d个距离内
-    for (int i = 0; i < 4; i++) {
-        for (int j = -d; j <= d; j++) {
-            if (j != 0) {
-                coordinate neighbor = Neighbor(temp, i, j);
+    for (let i = 0; i < 4; i++) {
+        for (let j = -d; j <= d; j++) {
+            if (j !== 0) {
+                const neighbor = Neighbor(temp, i, j);
                 if (judgeInRange(neighbor) && getColor(neighbor, game))
-                    return 1;
+                    return true;
             }
         }
     }
-    return 0;
+    return false;
 }
-// 获取drie方向上的情况
-int analyzeDire(coordinate temp, int dire, int player, char *beside, const Game &game) {
-    int length = 1;
-    int i;
-    for (i = -1;; i--) {
-        coordinate neighbor = Neighbor(temp, dire, i);
-        if (judgeInRange(neighbor) && player == game.MAP.board[neighbor.x][neighbor.y])
+
+// 获取指定方向上的情况
+function analyzeDire(temp: coordinate, dire: number, player: number, beside: number[], game: Game): number {
+    let length = 1;
+    let i = -1;
+    for (; ; i--) {
+        const neighbor = Neighbor(temp, dire, i);
+        if (judgeInRange(neighbor) && player === game.boardState.board[neighbor.x][neighbor.y])
             length++;
         else {
-            for (int j = 0; j < 4; j++) {
-                neighbor = Neighbor(temp, dire, i - j);
+            for (let j = 0; j < 4; j++) {
+                const neighbor = Neighbor(temp, dire, i - j);
                 if (judgeInRange(neighbor))
-                    beside[j] = game.MAP.board[neighbor.x][neighbor.y];
+                    beside[j] = game.boardState.board[neighbor.x][neighbor.y];
                 else
                     beside[j] = 3 - player;
             }
             break;
         }
     }
-    for (i = 1;; i++) {
-        coordinate neighbor = Neighbor(temp, dire, i);
-        if (judgeInRange(neighbor) && player == game.MAP.board[neighbor.x][neighbor.y])
+    for (i = 1; ; i++) {
+        const neighbor = Neighbor(temp, dire, i);
+        if (judgeInRange(neighbor) && player === game.boardState.board[neighbor.x][neighbor.y])
             length++;
         else {
-            for (int j = 0; j < 4; j++) {
-                neighbor = Neighbor(temp, dire, i + j);
+            for (let j = 0; j < 4; j++) {
+                const neighbor = Neighbor(temp, dire, i + j);
                 if (judgeInRange(neighbor))
-                    beside[4 + j] = game.MAP.board[neighbor.x][neighbor.y];
+                    beside[4 + j] = game.boardState.board[neighbor.x][neighbor.y];
                 else
                     beside[4 + j] = 3 - player;
             }
@@ -173,11 +188,23 @@ int analyzeDire(coordinate temp, int dire, int player, char *beside, const Game 
     }
     return length;
 }
-// 根据连子数目和边缘信息判断棋型
-chessType typeAnalysis(coordinate p, int dire, int player, const Game &game) {
-    char b[8] = {0};                                    // beside
-    int length = analyzeDire(p, dire, player, b, game); // 获取p点连子的长度和两边延伸4子的信息
-    chessType temp = {0};
+
+function typeAnalysis(p: coordinate, dire: number, player: number, game: Game): chessType {
+    const b: number[] = [0, 0, 0, 0, 0, 0, 0, 0];                                    // beside
+    let length = analyzeDire(p, dire, player, b, game); // 获取p点连子的长度和两边延伸4子的信息
+    const temp: chessType = {
+        win5: 0,
+        alive4: 0,
+        conti4: 0,
+        alive3: 0,
+        conti3: 0,
+        jump3: 0,
+        alive2: 0,
+        conti2: 0,
+        jump2: 0,
+        alive1: 0,
+        conti1: 0,
+    }
     if (length >= 5)
         temp.win5++;
     else if (length == 4) {
@@ -423,12 +450,12 @@ chessType typeAnalysis(coordinate p, int dire, int player, const Game &game) {
     }
     return temp;
 }
+
 // 单点得分
-int singleScore(coordinate p, int player, const Game &game) {
-    chessType chesstype = typeAnalysis(p, 0, player, game);
-    for (int i = 1; i < 4; i++) {
-        chessType temp;
-        temp = typeAnalysis(p, i, player, game);
+function singleScore(p: coordinate, player: number, game: Game): number {
+    const chesstype = typeAnalysis(p, 0, player, game);
+    for (let i = 1; i < 4; i++) {
+        const temp = typeAnalysis(p, i, player, game);
         chesstype.win5 += temp.win5;
         chesstype.alive4 += temp.alive4;
         chesstype.conti4 += temp.conti4;
@@ -443,20 +470,21 @@ int singleScore(coordinate p, int player, const Game &game) {
     }
     if (chesstype.win5) // 胜
         return 1048576;
-    int score = ((chesstype.conti4 << 12) +
-                 (chesstype.alive3 << 12) + (chesstype.conti3 << 8) + (chesstype.jump3 << 10) +
-                 (chesstype.alive2 << 8) + (chesstype.conti2 << 3) + (chesstype.jump2 << 6) +
-                 (chesstype.alive1 << 3) + chesstype.conti1);
+    let score = ((chesstype.conti4 << 12) +
+        (chesstype.alive3 << 12) + (chesstype.conti3 << 8) + (chesstype.jump3 << 10) +
+        (chesstype.alive2 << 8) + (chesstype.conti2 << 3) + (chesstype.jump2 << 6) +
+        (chesstype.alive1 << 3) + chesstype.conti1);
     if (chesstype.alive3 >= 2 || (chesstype.conti4 && chesstype.alive3) || chesstype.alive4 || chesstype.conti4 >= 2) // 必胜?
         score += 65536;
     return score;
 }
+
 // 棋盘整体局面分
-int wholeScore(int player, const Game &game) {
-    int Score = 0;
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        for (int j = 0; j < BOARD_SIZE; j++) {
-            coordinate temp = {i, j, game.MAP.board[i][j]};
+function wholeScore(player: number, game: Game) {
+    let Score = 0;
+    for (let i = 0; i < BOARD_SIZE; i++) {
+        for (let j = 0; j < BOARD_SIZE; j++) {
+            const temp = new coordinate(i, j, game.boardState.board[i][j]);
             if (temp.score == 0)
                 continue;
             if (temp.score == player) {
@@ -467,13 +495,14 @@ int wholeScore(int player, const Game &game) {
     }
     return Score; // 己方总分减对方总分 得到当前对己方来说的局势分
 }
+
 // 启发性搜索
-int inspireSearch(coordinate *scoreBoard, int player, Game &game) {
-    int length = 0;
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        for (int j = 0; j < BOARD_SIZE; j++) {
-            if (game.MAP.board[i][j] == 0) {
-                coordinate temp = {i, j, 0};
+function inspireSearch(scoreBoard: coordinate[], player: number, game: Game) {
+    let length = 0;
+    for (let i = 0; i < BOARD_SIZE; i++) {
+        for (let j = 0; j < BOARD_SIZE; j++) {
+            if (game.boardState.board[i][j] == 0) {
+                const temp = new coordinate(i, j, 0);
                 if (hasNeighbor(temp, 3, game)) {
                     scoreBoard[length] = temp;
                     scoreBoard[length].score = singleScore(temp, 3 - player, game);
@@ -486,13 +515,13 @@ int inspireSearch(coordinate *scoreBoard, int player, Game &game) {
     // 对 scoreBoard 进行排序
     quickSort(scoreBoard, length - 1);
     // 找到最高分数
-    int maxScore = scoreBoard[0].score;
+    let maxScore = scoreBoard[0].score;
     if (maxScore < 5)
-        game.draw = 1;
-    const int threshold = maxScore / 3;
+        game.draw = true;
+    const threshold = maxScore / 3;
     // 找到分界线
-    int boundary = 1;
-    for (int i = 1; i < length; i++) {
+    let boundary = 1;
+    for (let i = 1; i < length; i++) {
         if (scoreBoard[i].score <= threshold) {
             boundary = i; // 更新分界线位置
             break;        // 分数低于阈值，跳出循环
@@ -503,20 +532,22 @@ int inspireSearch(coordinate *scoreBoard, int player, Game &game) {
     // 返回 length，最多不超过
     return length > 10 ? 10 : length;
 }
+
 // 负极大极小值搜索
-coordinate alphaBeta(int depth, int alpha, int beta, int player, coordinate command, coordinate current, Game &game) {
-    coordinate temp = command;
+function alphaBeta(depth: number, alpha: number, beta: number, player: number, command: coordinate, current: coordinate, game: Game): coordinate {
+    //let temp = JSON.parse(JSON.stringify(command)) as coordinate;
+    let temp = new coordinate(command.x, command.y, command.score)
     if (depth == 0) {
         temp.score = wholeScore(player, game);
         return temp;
     }
-    coordinate steps[BOARD_SIZE * BOARD_SIZE];
-    int length = inspireSearch(steps, player, game); // 搜索可落子点
+    const steps: coordinate[] = new Array<coordinate>(BOARD_SIZE * BOARD_SIZE);
+    let length = inspireSearch(steps, player, game); // 搜索可落子点
     if (length > 7 && depth > 1)
         depth--;
     else if (length > 2)
         depth--;
-    for (int i = 0; i < length; i++) {
+    for (let i = 0; i < length; i++) {
         place(steps[i], player, game);                                               // 模拟落子
         temp = alphaBeta(depth, -beta, -alpha, 3 - player, steps[i], command, game); // 取负值并交换alpha和beta
         temp.score *= -1;
@@ -531,62 +562,26 @@ coordinate alphaBeta(int depth, int alpha, int beta, int player, coordinate comm
     temp.score = alpha;
     return temp;
 }
+
 // 搜索入口
-coordinate entrance(int depth, int alpha, int beta, int player, coordinate command, coordinate current, Game &game) {
-    coordinate steps[BOARD_SIZE * BOARD_SIZE]{};
-    coordinate temp;
-    coordinate best;
-    int length;
-    length = inspireSearch(steps, player, game); // 搜索可落子点
+function entrance(depth: number, alpha: number, beta: number, player: number, command: coordinate, current: coordinate, game: Game) {
+    const steps: coordinate[] = new Array<coordinate>(BOARD_SIZE * BOARD_SIZE)
+    let temp = new coordinate;
+    let best = new coordinate;
+    let length = inspireSearch(steps, player, game); // 搜索可落子点
     if (length == 1 || game.draw)
-      return steps[0];
-    for (int i = 0; i < length; i++) {
-      place(steps[i], player, game);                                               // 模拟落子
-      temp = alphaBeta(depth, -beta, -alpha, 3 - player, steps[i], command, game); // 递归
-      temp.score *= -1;
-      place(steps[i], 0, game); // 还原落子
-      if (temp.score > alpha) {
-          alpha = temp.score;
-          best = steps[i]; // 记录最佳落子
-      }
+        return steps[0];
+    for (let i = 0; i < length; i++) {
+        place(steps[i], player, game);                                               // 模拟落子
+        temp = alphaBeta(depth, -beta, -alpha, 3 - player, steps[i], command, game); // 递归
+        temp.score *= -1;
+        place(steps[i], 0, game); // 还原落子
+        if (temp.score > alpha) {
+            alpha = temp.score;
+            best = steps[i]; // 记录最佳落子
+        }
     }
     best.score = alpha;
     return best;
 }
 
-/*
-  * @param board: 棋盘状态
-  * @param myFlag: 我方棋子颜色
-  * @param depth: 搜索深度
-  * @return: 返回落子位置
-  * @outX: 落子横坐标指针
-  * @outY: 落子纵坐标指针
-  * @outScore: 落子分数指针
-  * outX: 落子横坐标
-  * outY: 落子纵坐标
-  * outScore: 落子分数
-  * -1: 游戏平局
-  */
-extern "C" void decideMove(const int board[BOARD_SIZE * BOARD_SIZE], int myFlag, int depth, int* outX, int* outY, int* outScore) {
-    Game localGame;
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        for (int j = 0; j < BOARD_SIZE; j++) {
-            localGame.MAP.board[i][j] = board[i * BOARD_SIZE + j];
-        }
-    }
-    localGame.myFlag = myFlag;
-    localGame.enemyFlag = 3 - myFlag;
-    localGame.draw = 0;
-
-    coordinate cmd, current;
-    coordinate result = entrance(depth, _INF, INF, localGame.myFlag, cmd, current, localGame);
-    if (localGame.draw) {
-        *outX = -1;
-        *outY = -1;
-        *outScore = -1;
-        return;
-    }
-    *outX = result.x;
-    *outY = result.y;
-    *outScore = result.score;
-}

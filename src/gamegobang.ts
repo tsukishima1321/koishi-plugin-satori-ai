@@ -1,12 +1,8 @@
 import { Session, Logger, Context } from 'koishi'
 import { abstractGame, abstractGameSingleGame, gameResult } from './abstractGame'
+import { runGobang } from './gobangUtils'
 
 const logger = new Logger('satori-game-gobang')
-
-// 加载 WASM 模块（五子棋 AI 逻辑）
-const Module = require('../wasm/gobang.js')
-let wasmModule
-Module().then((mod) => { wasmModule = mod })
 
 // 胜负标志枚举
 export enum winFlag {
@@ -69,29 +65,11 @@ class goBangSingleGame extends abstractGameSingleGame {
     this.board[x][y] = this.playerFlag
     if (this.checkWin(x, y)) return this.printBoard() + '\n游戏已结束，发送结束游戏退出'
 
-    // 调用 WASM 计算 AI 落子
-    const flatBoard = this.board.flat()
-    const arrayPtr = wasmModule._malloc(flatBoard.length * 4) // 分配内存
-    wasmModule.HEAP32.set(flatBoard, arrayPtr / 4) // 将棋盘数据写入 WASM 内存
-
-    // 分配用于返回坐标和分数的内存
-    const xPtr = wasmModule._malloc(4)
-    const yPtr = wasmModule._malloc(4)
-    const scorePtr = wasmModule._malloc(4)
-
-    // 调用 C++ decideMove
-    wasmModule._decideMove(arrayPtr, this.playerFlag, this.level, xPtr, yPtr, scorePtr)
-
     // 解析坐标与分数
-    const aiX = wasmModule.HEAP32[xPtr >> 2]
-    const aiY = wasmModule.HEAP32[yPtr >> 2]
-    const score = wasmModule.HEAP32[scorePtr >> 2]
-
-    // 释放内存
-    wasmModule._free(arrayPtr)
-    wasmModule._free(xPtr)
-    wasmModule._free(yPtr)
-    wasmModule._free(scorePtr)
+    //const aiX = wasmModule.HEAP32[xPtr >> 2]
+    //const aiY = wasmModule.HEAP32[yPtr >> 2]
+    //const score = wasmModule.HEAP32[scorePtr >> 2]
+    const { aiX, aiY, score } = await runGobang(this.board, this.playerFlag, this.level)
 
     // 若返回 -1 -1 -1，则表示平局
     if (aiX === -1 && aiY === -1 && score === -1) {
